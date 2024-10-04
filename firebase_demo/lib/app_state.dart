@@ -41,6 +41,15 @@ class ApplicationState extends ChangeNotifier {
     }
   }
 
+  int _userColor = 0xFF000000; // Default color (black)
+  int get userColor => _userColor;
+
+  set userColor(int color) {
+    _userColor = color;
+    _updateUserColor();
+    notifyListeners();
+  }
+
   Future<void> init() async {
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
@@ -49,6 +58,57 @@ class ApplicationState extends ChangeNotifier {
       EmailAuthProvider(),
     ]);
 
+    FirebaseAuth.instance.userChanges().listen((user) {
+      if (user != null) {
+        _loggedIn = true;
+        _fetchUserColor(user.uid);
+        _subscribeToGuestBook();
+        _subscribeToAttendees(user.uid);
+      } else {
+        _loggedIn = false;
+        _guestBookMessages = [];
+        _guestBookSubscription?.cancel();
+        _attendingSubscription?.cancel();
+      }
+      notifyListeners();
+    });
+  }
+
+  void _fetchUserColor(String uid) {
+    FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) {
+      if (doc.exists && doc.data()?['color'] != null) {
+        _userColor = doc.data()!['color'] as int;
+        notifyListeners();
+      }
+    }).catchError((error) {
+      if (error is FirebaseException && error.code == 'permission-denied') {
+        print(
+            "Permission denied when fetching user color. Ensure Firestore rules are set correctly.");
+        // Handle the permission denied error (e.g., use default color, show a message to the user)
+      } else {
+        print("Error fetching user color: $error");
+      }
+    });
+  }
+
+  void _subscribeToGuestBook() {
+    _guestBookSubscription = FirebaseFirestore.instance
+        .collection('guestbook')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      _guestBookMessages = [];
+      for (final document in snapshot.docs) {
+        _guestBookMessages.add(GuestBookMessage.fromMap(document.data()));
+      }
+      notifyListeners();
+    }, onError: (error) {
+      print("Error subscribing to guestbook: $error");
+      // Handle the error appropriately
+    });
+  }
+
+  void _subscribeToAttendees(String uid) {
     FirebaseFirestore.instance
         .collection('attendees')
         .where('attending', isEqualTo: true)
@@ -56,49 +116,27 @@ class ApplicationState extends ChangeNotifier {
         .listen((snapshot) {
       _attendees = snapshot.docs.length;
       notifyListeners();
+    }, onError: (error) {
+      print("Error subscribing to attendees: $error");
+      // Handle the error appropriately
     });
 
-    FirebaseAuth.instance.userChanges().listen((user) {
-      if (user != null) {
-        _loggedIn = true;
-        _guestBookSubscription = FirebaseFirestore.instance
-            .collection('guestbook')
-            .orderBy('timestamp', descending: true)
-            .snapshots()
-            .listen((snapshot) {
-          _guestBookMessages = [];
-          for (final document in snapshot.docs) {
-            _guestBookMessages.add(
-              GuestBookMessage(
-                name: document.data()['name'] as String,
-                message: document.data()['text'] as String,
-              ),
-            );
-          }
-          notifyListeners();
-        });
-        _attendingSubscription = FirebaseFirestore.instance
-            .collection('attendees')
-            .doc(user.uid)
-            .snapshots()
-            .listen((snapshot) {
-          if (snapshot.data() != null) {
-            if (snapshot.data()!['attending'] as bool) {
-              _attending = Attending.yes;
-            } else {
-              _attending = Attending.no;
-            }
-          } else {
-            _attending = Attending.unknown;
-          }
-          notifyListeners();
-        });
+    _attendingSubscription = FirebaseFirestore.instance
+        .collection('attendees')
+        .doc(uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.data() != null) {
+        _attending = snapshot.data()!['attending'] as bool
+            ? Attending.yes
+            : Attending.no;
       } else {
-        _loggedIn = false;
-        _guestBookMessages = [];
-        _guestBookSubscription?.cancel();
+        _attending = Attending.unknown;
       }
       notifyListeners();
+    }, onError: (error) {
+      print("Error subscribing to user attendance: $error");
+      // Handle the error appropriately
     });
   }
 
@@ -114,6 +152,21 @@ class ApplicationState extends ChangeNotifier {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'name': FirebaseAuth.instance.currentUser!.displayName,
       'userId': FirebaseAuth.instance.currentUser!.uid,
+      'color': _userColor,
     });
+  }
+
+  Future<void> _updateUserColor() async {
+    if (!_loggedIn) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .set({'color': _userColor}, SetOptions(merge: true));
+    } catch (e) {
+      print("Error updating user color: $e");
+      // Handle the error appropriately
+    }
   }
 }

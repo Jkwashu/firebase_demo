@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart'; // new
 import 'app_state.dart'; // new
 import 'home_page.dart';
+import 'profile_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -80,14 +81,7 @@ final _router = GoRouter(
         GoRoute(
           path: 'profile',
           builder: (context, state) {
-            return ProfileScreen(
-              providers: const [],
-              actions: [
-                SignedOutAction((context) {
-                  context.pushReplacement('/');
-                }),
-              ],
-            );
+            return ProfilePage();
           },
         ),
       ],

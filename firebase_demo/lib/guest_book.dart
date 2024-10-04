@@ -69,7 +69,47 @@ class _GuestBookState extends State<GuestBook> {
         ),
         const SizedBox(height: 8),
         for (var message in widget.messages)
-          Paragraph('${message.name}: ${message.message}'),
+          Padding(
+            padding: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Color(message.color),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      message.name[0].toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        message.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(message.color),
+                        ),
+                      ),
+                      Text(message.message),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 8),
       ],
     );
